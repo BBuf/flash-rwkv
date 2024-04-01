@@ -1,6 +1,7 @@
 import torch
 import unittest
-from rwkv5_attention import Rwkv5LinearAttention
+import flash_rwkv
+from flash_rwkv import Rwkv5LinearAttention
 
 def rwkv5_linear_attention_cpu(receptance, key, value, time_decay, time_first, state):
     # For CPU fallback. Will be slower and probably take more memory than the custom CUDA kernel if not executed

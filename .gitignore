@@ -1,1 +1,7 @@
 kernels/
+build/
+dist/
+flash_rwkv.egg-info/
+rwkv5_attention/
+__pycache__/
+.hypothesis/

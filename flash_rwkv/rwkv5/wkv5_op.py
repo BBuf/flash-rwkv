@@ -1,15 +1,15 @@
 from pathlib import Path
 import torch
 
-KERNEL_PATH = Path(__file__).parent / "kernels" / "wkv5_cuda_kernel.so"
+KERNEL_PATH = Path(__file__).parent.parent.parent / "rwkv5_attention/kernels" / "flash_rwkv_wkv5_cuda.so"
 
 rwkv5_cuda_kernel = None
 
-def load_wkv5_cuda_kernel(head_size):
+def load_wkv5_cuda_kernel():
     global rwkv5_cuda_kernel
 
     if rwkv5_cuda_kernel is None:
-        print(f"Loading pre-compiled CUDA kernel for RWKV5 at head size of {head_size}.")
+        print(f"Loading pre-compiled CUDA kernel for RWKV5 at head size of 64.")
         rwkv5_cuda_kernel = torch.ops.load_library(str(KERNEL_PATH))
 
     return
@@ -127,3 +127,5 @@ class Rwkv5LinearAttention(torch.autograd.Function):
             g_time_decay = torch.sum(g_time_decay, 0).view(num_heads, head_size)
             g_time_first = torch.sum(g_time_first, 0).view(num_heads, head_size)
             return (None, None, None, None, greceptance, g_key, g_value, g_time_decay, g_time_first)
+
+load_wkv5_cuda_kernel()
