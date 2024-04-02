@@ -24,7 +24,7 @@ def rwkv5_linear_attention_cpu(receptance, key, value, time_decay, time_first, s
         with torch.no_grad():
             state = attention_output + time_decay * state
 
-    return out, state
+    return out.reshape(batch, seq_length, -1), state
 
 class TestRwkv5LinearAttention(unittest.TestCase):
     def test_rwkv5_linear_attention(self):
@@ -50,10 +50,14 @@ class TestRwkv5LinearAttention(unittest.TestCase):
             state = state.to(dtype)
 
             out_cpu, state_cpu = rwkv5_linear_attention_cpu(receptance, key, value, time_decay, time_first, state)
-            out_cuda, state_cuda = Rwkv5LinearAttention.apply(receptance, key, value, time_decay, time_first, state)
+            out_cuda, state_cuda = Rwkv5LinearAttention.apply(receptance.to("cuda"), key.to("cuda"), value.to("cuda"), time_decay.to("cuda"), time_first.to("cuda"), state.to("cuda"))
 
-            self.assertTrue(torch.allclose(out_cpu, out_cuda, atol=1e-3, rtol=1e-3))
-            self.assertTrue(torch.allclose(state_cpu, state_cuda, atol=1e-3, rtol=1e-3))
+            print('out_cpu.shape: ', out_cpu.shape)
+            print('out_cuda.shape: ', out_cuda.shape)
+            print('output_cpu: ', out_cpu.numpy().flatten()[:20])
+            print('out_cuda: ', out_cuda.cpu().numpy().flatten()[:20])
+            self.assertTrue(torch.allclose(out_cpu, out_cuda.cpu(), atol=1e-3, rtol=1e-3))
+            self.assertTrue(torch.allclose(state_cpu, state_cuda.cpu(), atol=1e-3, rtol=1e-3))
 
 if __name__ == '__main__':
     unittest.main()

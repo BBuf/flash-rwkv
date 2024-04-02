@@ -1,18 +1,34 @@
-from pathlib import Path
+import os
 import torch
-
-KERNEL_PATH = Path(__file__).parent.parent.parent / "rwkv5_attention/kernels" / "flash_rwkv_wkv5_cuda.so"
+from pathlib import Path
+from torch.utils.cpp_extension import load as load_kernel
 
 rwkv5_cuda_kernel = None
 
 def load_wkv5_cuda_kernel():
     global rwkv5_cuda_kernel
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    cuda_sources = [
+        os.path.join(current_dir, "wkv5_op.cpp"),
+        os.path.join(current_dir, "wkv5_kernel.cu"),
+    ]
 
     if rwkv5_cuda_kernel is None:
-        print(f"Loading pre-compiled CUDA kernel for RWKV5 at head size of 64.")
-        print(f"KERNEL_PATH: {KERNEL_PATH}")
-        rwkv5_cuda_kernel = torch.ops.load_library(str(KERNEL_PATH))
-
+        flags = [
+            "-res-usage",
+            "--maxrregcount 60",
+            "--use_fast_math",
+            "-O3",
+            "-Xptxas -O3",
+            "--extra-device-vectorization",
+            f"-D_N_={64}",
+            ]
+        rwkv5_cuda_kernel = load_kernel(
+            name="flash_rwkv_5",
+            sources=cuda_sources,
+            verbose=False,
+            extra_cuda_cflags=flags,
+        )
     return
 
 
