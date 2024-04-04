@@ -26,7 +26,7 @@ def load_wkv5_cuda_kernel():
         rwkv5_cuda_kernel = load_kernel(
             name="flash_rwkv_5",
             sources=cuda_sources,
-            verbose=False,
+            verbose=True,
             extra_cuda_cflags=flags,
         )
     return
@@ -38,7 +38,7 @@ class Rwkv5LinearAttention(torch.autograd.Function):
         with torch.no_grad():
             assert state.dtype == torch.float32
             batch, seq_length, hidden_size = key.shape
-            num_heads = time_decay.shape[0]
+            num_heads = time_decay.shape[0] // 64
             ctx.batch = batch
             ctx.seq_length = seq_length
             ctx.hidden_size = hidden_size

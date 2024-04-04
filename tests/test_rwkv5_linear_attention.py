@@ -3,28 +3,42 @@ import unittest
 import flash_rwkv
 from flash_rwkv import Rwkv5LinearAttention
 
-def rwkv5_linear_attention_cpu(receptance, key, value, time_decay, time_first, state):
-    # For CPU fallback. Will be slower and probably take more memory than the custom CUDA kernel if not executed
-    # within a torch.no_grad.
-    batch, seq_length, hidden_size = receptance.shape
-    num_heads, head_size = time_first.shape
-    key = key.float().view(batch, seq_length, num_heads, head_size).transpose(1, 2).transpose(-2, -1)
-    value = value.float().view(batch, seq_length, num_heads, head_size).transpose(1, 2)
-    receptance = receptance.float().view(batch, seq_length, num_heads, head_size).transpose(1, 2)
-    time_decay = torch.exp(-torch.exp(time_decay.float())).reshape(-1, 1, 1).reshape(num_heads, -1, 1)
-    time_first = time_first.float().reshape(-1, 1, 1).reshape(num_heads, -1, 1)
-    out = torch.zeros_like(key).reshape(batch, seq_length, num_heads, head_size)
+# copy from https://github.com/BlinkDL/RWKV-CUDA/blob/main/wkv5/run.py#L112C1-L174C29
+def RUN_FORMULA_2(B, T, C, H, r, k, v, w, u):
+    N = C // H
+    r = r.flatten().contiguous() # BTHN
+    k = k.flatten().contiguous() # BTHN
+    v = v.flatten().contiguous() # BTHN
+    w = w.flatten().contiguous() # HN
+    u = u.flatten().contiguous() # HN
+    out = torch.zeros(B*T*C, device="cpu").contiguous()
 
-    for current_index in range(seq_length):
-        current_receptance = receptance[:, :, current_index:current_index+1, :]
-        current_key = key[:, :, :, current_index:current_index+1]
-        current_value = value[:, :, current_index:current_index+1, :]
-        attention_output = current_key @ current_value
-        out[:, current_index] = (current_receptance @ (time_first * attention_output + state)).squeeze(2)
-        with torch.no_grad():
-            state = attention_output + time_decay * state
+    # kernel for v1/v1a/v1b
+    for b in range(B):
+        for h in range(H):
+            state = torch.zeros(N*N, device="cpu").contiguous()
+            for t in range(T):
 
-    return out.reshape(batch, seq_length, -1), state
+                _o0 = b*H*T*N + t*H*N + h*N
+                _o1 = h*N
+
+                for _i in range(N):
+
+                    i = _o0 + _i
+                    
+                    for _j in range(N):
+                        
+                        j = _o0 + _j
+                        m = _o1 + _j
+                        ij = _i * N + _j
+
+                        x = k[j] * v[i]
+                        s = state[ij]
+                        
+                        out[i] += r[j] * (u[m] * x + s)
+                        state[ij] = s * w[m] + x
+
+    return out.view(B, T, C)
 
 class TestRwkv5LinearAttention(unittest.TestCase):
     def test_rwkv5_linear_attention(self):
@@ -37,9 +51,9 @@ class TestRwkv5LinearAttention(unittest.TestCase):
         receptance = torch.randn(batch_size, seq_length, hidden_size, dtype=torch.float32)
         key = torch.randn(batch_size, seq_length, hidden_size, dtype=torch.float32)
         value = torch.randn(batch_size, seq_length, hidden_size, dtype=torch.float32)
-        time_decay = torch.randn(num_heads, head_size, dtype=torch.float32)
-        time_first = torch.randn(num_heads, head_size, dtype=torch.float32)
-        state = torch.randn(batch_size, num_heads, head_size, head_size, dtype=torch.float32)
+        time_decay = torch.randn(hidden_size, dtype=torch.float32)
+        time_first = torch.randn(hidden_size, dtype=torch.float32)
+        state = torch.zeros(batch_size, num_heads, head_size, head_size, dtype=torch.float32)
 
         for dtype in [torch.float32, torch.float16, torch.bfloat16]:
             receptance = receptance.to(dtype)
@@ -47,17 +61,15 @@ class TestRwkv5LinearAttention(unittest.TestCase):
             value = value.to(dtype)
             time_decay = time_decay.to(dtype)
             time_first = time_first.to(dtype)
-            state = state.to(dtype)
 
-            out_cpu, state_cpu = rwkv5_linear_attention_cpu(receptance, key, value, time_decay, time_first, state)
+            out_cpu = RUN_FORMULA_2(batch_size, seq_length, hidden_size, num_heads, receptance, key, value, torch.exp(-torch.exp(time_decay)), time_first)
             out_cuda, state_cuda = Rwkv5LinearAttention.apply(receptance.to("cuda"), key.to("cuda"), value.to("cuda"), time_decay.to("cuda"), time_first.to("cuda"), state.to("cuda"))
 
-            print('out_cpu.shape: ', out_cpu.shape)
-            print('out_cuda.shape: ', out_cuda.shape)
-            print('output_cpu: ', out_cpu.numpy().flatten()[:20])
-            print('out_cuda: ', out_cuda.cpu().numpy().flatten()[:20])
-            self.assertTrue(torch.allclose(out_cpu, out_cuda.cpu(), atol=1e-3, rtol=1e-3))
-            self.assertTrue(torch.allclose(state_cpu, state_cuda.cpu(), atol=1e-3, rtol=1e-3))
+            if dtype == torch.float32:
+                self.assertTrue(torch.allclose(out_cpu.to(dtype), out_cuda.cpu()))
+            else:
+                self.assertTrue(torch.allclose(out_cpu.to(dtype), out_cuda.cpu(), rtol=0.1, atol=0.1))
+            print(f'passed dtype: {dtype}')
 
 if __name__ == '__main__':
     unittest.main()

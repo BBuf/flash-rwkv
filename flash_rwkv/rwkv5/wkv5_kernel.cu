@@ -14,23 +14,23 @@ __global__ void kernel_forward(const int B, const int T, const int C, const int 
     const int b = blockIdx.x / H;
     const int h = blockIdx.x % H;
     const int i = threadIdx.x;
-    _w += h * _N_;
-    _u += h * _N_;
-    _state += h * _N_ * _N_ + i * _N_; // wrong if B > 1 !!!
+    _w += h*_N_;
+    _u += h*_N_;
+    _state += h*_N_*_N_ + i*_N_; // wrong if B > 1 !!!
 
     __shared__ float r[_N_], k[_N_], u[_N_], w[_N_];
-
+    
     float state[_N_];
-#pragma unroll
+    #pragma unroll
     for (int j = 0; j < _N_; j++)
         state[j] = _state[j];
-
+    
     __syncthreads();
     u[i] = float(_u[i]);
     w[i] = _w[i];
     __syncthreads();
 
-    for (int t = b * T * C + h * _N_ + i; t < (b + 1) * T * C + h * _N_ + i; t += C)
+    for (int t = b*T*C + h*_N_ + i; t < (b+1)*T*C + h*_N_ + i; t += C)
     {
         __syncthreads();
         r[i] = float(_r[t]);
@@ -40,14 +40,14 @@ __global__ void kernel_forward(const int B, const int T, const int C, const int 
         const float v = float(_v[t]);
         float y = 0;
 
-#pragma unroll
-        for (int j = 0; j < _N_; j += 4)
+        #pragma unroll
+        for (int j = 0; j < _N_; j+=4)
         {
-            const float4 &r_ = (float4 &)(r[j]);
-            const float4 &k_ = (float4 &)(k[j]);
-            const float4 &w_ = (float4 &)(w[j]);
-            const float4 &u_ = (float4 &)(u[j]);
-            float4 &s = (float4 &)(state[j]);
+            const float4& r_ = (float4&)(r[j]);
+            const float4& k_ = (float4&)(k[j]);
+            const float4& w_ = (float4&)(w[j]);
+            const float4& u_ = (float4&)(u[j]);
+            float4& s = (float4&)(state[j]);
             float4 x;
 
             x.x = k_.x * v;
@@ -67,7 +67,7 @@ __global__ void kernel_forward(const int B, const int T, const int C, const int 
         }
         _y[t] = F(y);
     }
-#pragma unroll
+    #pragma unroll
     for (int j = 0; j < _N_; j++)
         _state[j] = state[j];
 }
