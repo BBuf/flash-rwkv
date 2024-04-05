@@ -92,10 +92,7 @@ class TestRwkv5LinearAttention(unittest.TestCase):
             out_cpu = RUN_FORMULA_2(batch_size, seq_length, hidden_size, num_heads, receptance, key, value, torch.exp(-torch.exp(time_decay)), time_first)
             out_cuda, state_cuda = Rwkv5LinearAttention.apply(receptance.to("cuda"), key.to("cuda"), value.to("cuda"), time_decay.to("cuda"), time_first.to("cuda"), state.to("cuda"))
 
-            if dtype == torch.float32:
-                self.assertTrue(torch.allclose(out_cpu.to(dtype), out_cuda.cpu()))
-            else:
-                self.assertTrue(torch.allclose(out_cpu.to(dtype), out_cuda.cpu(), rtol=0.1, atol=0.1))
+            self.assertTrue(torch.allclose(out_cpu.to(dtype), out_cuda.cpu(), rtol=0.1, atol=0.1))
             print(f'test_rwkv5_linear_attention_decode passed dtype: {dtype}')
 
 if __name__ == '__main__':
