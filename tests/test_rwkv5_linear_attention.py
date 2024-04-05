@@ -41,7 +41,34 @@ def RUN_FORMULA_2(B, T, C, H, r, k, v, w, u):
     return out.view(B, T, C)
 
 class TestRwkv5LinearAttention(unittest.TestCase):
-    def test_rwkv5_linear_attention(self):
+    def test_rwkv5_linear_attention_prefill(self):
+        batch_size = 4
+        seq_length = 16
+        hidden_size = 128
+        num_heads = 2
+        head_size = 64
+
+        receptance = torch.randn(batch_size, seq_length, hidden_size, dtype=torch.float32)
+        key = torch.randn(batch_size, seq_length, hidden_size, dtype=torch.float32)
+        value = torch.randn(batch_size, seq_length, hidden_size, dtype=torch.float32)
+        time_decay = torch.randn(hidden_size, dtype=torch.float32)
+        time_first = torch.randn(hidden_size, dtype=torch.float32)
+        state = torch.zeros(batch_size, num_heads, head_size, head_size, dtype=torch.float32)
+
+        for dtype in [torch.float32, torch.float16, torch.bfloat16]:
+            receptance = receptance.to(dtype)
+            key = key.to(dtype)
+            value = value.to(dtype)
+            time_decay = time_decay.to(dtype)
+            time_first = time_first.to(dtype)
+
+            out_cpu = RUN_FORMULA_2(batch_size, seq_length, hidden_size, num_heads, receptance, key, value, torch.exp(-torch.exp(time_decay)), time_first)
+            out_cuda, state_cuda = Rwkv5LinearAttention.apply(receptance.to("cuda"), key.to("cuda"), value.to("cuda"), time_decay.to("cuda"), time_first.to("cuda"), state.to("cuda"))
+
+            self.assertTrue(torch.allclose(out_cpu.to(dtype), out_cuda.cpu(), rtol=0.1, atol=0.1))
+            print(f'test_rwkv5_linear_attention_prefill passed dtype: {dtype}')
+
+    def test_rwkv5_linear_attention_decode(self):
         batch_size = 1
         seq_length = 1
         hidden_size = 2048
@@ -69,7 +96,7 @@ class TestRwkv5LinearAttention(unittest.TestCase):
                 self.assertTrue(torch.allclose(out_cpu.to(dtype), out_cuda.cpu()))
             else:
                 self.assertTrue(torch.allclose(out_cpu.to(dtype), out_cuda.cpu(), rtol=0.1, atol=0.1))
-            print(f'passed dtype: {dtype}')
+            print(f'test_rwkv5_linear_attention_decode passed dtype: {dtype}')
 
 if __name__ == '__main__':
     unittest.main()
