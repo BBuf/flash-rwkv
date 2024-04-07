@@ -96,7 +96,7 @@ class Rwkv5LinearAttention(torch.autograd.Function):
                     time_first,
                     out,
                 )
-            return out, state
+            return out
 
     @staticmethod
     def backward(ctx, gout):
@@ -109,7 +109,7 @@ class Rwkv5LinearAttention(torch.autograd.Function):
 
             global_shape = (batch, seq_length, hidden_size)
 
-            greceptance = torch.empty(
+            g_receptance = torch.empty(
                 global_shape,
                 device=gout.device,
                 requires_grad=False,
@@ -134,14 +134,14 @@ class Rwkv5LinearAttention(torch.autograd.Function):
                 (batch, hidden_size),
                 device=gout.device,
                 requires_grad=False,
-                dtype=torch.bfloat16,
+                dtype=receptance.dtype,
                 memory_format=torch.contiguous_format,
             )
             g_time_first = torch.empty(
                 (batch, hidden_size),
                 device=gout.device,
                 requires_grad=False,
-                dtype=torch.bfloat16,
+                dtype=receptance.dtype,
                 memory_format=torch.contiguous_format,
             )
             if receptance.dtype == torch.bfloat16:
@@ -157,7 +157,7 @@ class Rwkv5LinearAttention(torch.autograd.Function):
                     e_time_decay,
                     time_first,
                     gout,
-                    greceptance,
+                    g_receptance,
                     g_key,
                     g_value,
                     g_time_decay,
@@ -176,7 +176,7 @@ class Rwkv5LinearAttention(torch.autograd.Function):
                     e_time_decay,
                     time_first,
                     gout,
-                    greceptance,
+                    g_receptance,
                     g_key,
                     g_value,
                     g_time_decay,
@@ -195,15 +195,18 @@ class Rwkv5LinearAttention(torch.autograd.Function):
                     e_time_decay,
                     time_first,
                     gout,
-                    greceptance,
+                    g_receptance,
                     g_key,
                     g_value,
                     g_time_decay,
                     g_time_first,
                 )
             head_size = hidden_size // num_heads
-            g_time_decay = torch.sum(g_time_decay, 0).view(num_heads, head_size)
-            g_time_first = torch.sum(g_time_first, 0).view(num_heads, head_size)
-            return (None, None, None, None, greceptance, g_key, g_value, g_time_decay, g_time_first)
+            g_time_decay = torch.sum(g_time_decay, 0).flatten()
+            g_time_first = torch.sum(g_time_first, 0).flatten()
+            return (g_receptance, g_key, g_value, g_time_decay, g_time_first, None)
 
 load_wkv5_cuda_kernel()
+
+def rwkv5_cuda_linear_attention(receptance, key, value, time_decay, time_first, state):
+    return Rwkv5LinearAttention.apply(receptance, key, value, time_decay, time_first, state)

@@ -80,27 +80,20 @@ __global__ void kernel_backward(const int B, const int T, const int C, const int
     const int b = blockIdx.x / H;
     const int h = blockIdx.x % H;
     const int i = threadIdx.x;
-    _w += h * _N_;
-    _u += h * _N_;
-    __w += h * _N_;
-
-    __shared__ float w_[_N_], u_[_N_];
-    __shared__ float r[_N_], k[_N_], v[_N_], gy[_N_];
-    __syncthreads();
-    w_[i] = _w[i];
-    u_[i] = float(_u[i]);
-    __syncthreads();
-
-    const float w = w_[i];
+    _w += h*_N_;
+    _u += h*_N_;
+    __w += h*_N_;
+    const float w = _w[i];
+    const float u = float(_u[i]);
     const float ww = __w[i];
-    const float u = u_[i];
 
-    float state[_N_] = {0}, saaaa[_N_] = {0}, sbbbb[_N_] = {0}, scccc[_N_] = {0}, sdddd[_N_] = {0};
+    __shared__ float v[_N_], r[_N_], k[_N_], gy[_N_], w_[_N_], u_[_N_];
+    float state[_N_] = {0}, saaaa[_N_] = {0}, sbbbb[_N_] = {0};
 
     float gw = 0, gu = 0;
-    const int t000 = b * T * C + h * _N_ + i;
-    const int t111 = (b + 1) * T * C + h * _N_ + i;
-    const int t222 = t111 - 2 * C;
+    const int t000 = b*T*C + h*_N_ + i;
+    const int t111 = (b+1)*T*C + h*_N_ + i;
+    const int t222 = t111 - 2*C;
 
     for (int t = t000; t < t111; t += C)
     {
@@ -110,90 +103,86 @@ __global__ void kernel_backward(const int B, const int T, const int C, const int
         __syncthreads();
 
         const float k = float(_k[t]);
-        float gr = 0, gu_ = 0;
+        float gr = 0, _gu_ = 0;
 
-#pragma unroll
+        #pragma unroll
         for (int j = 0; j < _N_; j++)
         {
-            float &s = state[j];
+            float& s = state[j];
             float x = k * v[j];
 
             gr += (u * x + s) * gy[j];
-            gu_ += x * gy[j];
+            _gu_ += x * gy[j];
             s = s * w + x;
         }
         _gr[t] = F(gr);
-        gu += float(_r[t]) * gu_;
+        gu += float(_r[t]) * _gu_;
     }
-    _gu[b * C + h * _N_ + i] = F(gu);
-
+    _gu[b*C + h*_N_ + i] = F(gu);
+    
     for (int t = t000; t < t222; t += C)
     {
         __syncthreads();
         v[i] = float(_v[t]);
-        gy[i] = float(_gy[t + 2 * C]);
+        gy[i] = float(_gy[t + 2*C]);
         __syncthreads();
 
         const float k = float(_k[t]);
-        float gw_ = 0;
-
-#pragma unroll
+        const float r = float(_r[t + 2*C]);
+        
+        #pragma unroll
         for (int j = 0; j < _N_; j++)
         {
-            float &s = saaaa[j];
-            float &s2 = sbbbb[j];
+            float& s = saaaa[j];
+            float& s2 = sbbbb[j];
             float x = k * v[j];
-
+            
             float tmp = w * (x + s);
             s = tmp;
             s2 = tmp + w * s2;
-            gw_ += s2 * gy[j];
+            gw += r * s2 * gy[j];
         }
-        gw += float(_r[t + 2 * C]) * gw_;
-    }
-    _gw[b * C + h * _N_ + i] = F(ww * gw);
+    }    
+    _gw[b*C + h*_N_ + i] = F(ww * gw);
 
-    for (int t = t111 - C; t >= t000; t -= C)
-    {
-        __syncthreads();
-        v[i] = float(_v[t]);
-        gy[i] = float(_gy[t]);
-        __syncthreads();
-
-        const float rr = float(_r[t]);
-        float gk = 0;
-
-#pragma unroll
-        for (int j = 0; j < _N_; j++)
-        {
-            float &s = scccc[j];
-            float x = rr * gy[j];
-
-            gk += (u * x + s) * v[j];
-            s = x + s * w;
-        }
-        _gk[t] = F(gk);
+    #pragma unroll
+    for (int j = 0; j < _N_; ++j) {
+        saaaa[j] = 0;
+        sbbbb[j] = 0;
     }
 
+    __syncthreads();
+    w_[i] = _w[i];
+    u_[i] = float(_u[i]);
+    __syncthreads();
+    
     for (int t = t111 - C; t >= t000; t -= C)
     {
         __syncthreads();
         r[i] = float(_r[t]);
         k[i] = float(_k[t]);
+        v[i] = float(_v[t]);
+        gy[i] = float(_gy[t]);
         __syncthreads();
 
-        const float gyy = float(_gy[t]);
-        float gv = 0;
+        const float rr = r[i];
+        const float gyy = gy[i];
+        float gk = 0, gv = 0;
 
-#pragma unroll
+        #pragma unroll
         for (int j = 0; j < _N_; j++)
         {
-            float &s = sdddd[j];
-            float x = gyy * r[j];
-
-            gv += (u_[j] * x + s) * k[j];
-            s = x + s * w_[j];
+            float& s = saaaa[j];
+            float& s2 = sbbbb[j];
+            float x = rr * gy[j];
+            float x2 = gyy * r[j];
+            
+            gk += (u * x + s) * v[j];
+            gv += (u_[j] * x2 + s2) * k[j];
+            s = x + s * w;
+            s2 = x2 + s2 * w_[j];
         }
+        _gk[t] = F(gk);
         _gv[t] = F(gv);
     }
 }

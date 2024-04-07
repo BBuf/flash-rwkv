@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="flash_rwkv",
-    version="0.1.3",
+    version="0.2.0",
     packages=find_packages(),
     package_data={
         'flash_rwkv': ['rwkv5/*.cu', 'rwkv5/*.cpp'],
