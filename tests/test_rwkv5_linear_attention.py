@@ -181,7 +181,7 @@ class TestRwkv5LinearAttention(unittest.TestCase):
             
             LOSS(yy).backward()
             g_formula1 = yy.grad.data.clone()
-            LOSS(formula1).backward()
+            LOSS(out_formula1).backward()
             g_receptance_0 = receptance.grad.data.clone()
             g_key_0 = key.grad.data.clone()
             g_value_0 = value.grad.data.clone()
@@ -209,7 +209,7 @@ class TestRwkv5LinearAttention(unittest.TestCase):
             out_cuda = rwkv5_cuda_linear_attention(receptance, key, value, time_decay, time_first, state)
             LOSS(out_cuda).backward()
 
-            self.assertTrue(torch.allclose(formula1.cpu().to(dtype), out_cuda.cpu().to(dtype), rtol=0.1, atol=0.1))
+            self.assertTrue(torch.allclose(out_formula1.cpu().to(dtype), out_cuda.cpu().to(dtype), rtol=0.1, atol=0.1))
             self.assertTrue(torch.allclose(g_receptance_0.cpu().to(dtype), receptance.grad.data.clone().cpu().to(dtype), rtol=0.1, atol=0.1))
             self.assertTrue(torch.allclose(g_key_0.cpu().to(dtype), key.grad.data.clone().cpu().to(dtype), rtol=0.1, atol=0.1))
             self.assertTrue(torch.allclose(g_value_0.cpu().to(dtype), value.grad.data.clone().cpu().to(dtype), rtol=0.1, atol=0.1))
