@@ -111,11 +111,11 @@ class TestRwkv5LinearAttention(unittest.TestCase):
         num_heads = 2
         head_size = 64
 
-        receptance = torch.randn(batch_size, seq_length, hidden_size, dtype=torch.float32)
-        key = torch.randn(batch_size, seq_length, hidden_size, dtype=torch.float32)
-        value = torch.randn(batch_size, seq_length, hidden_size, dtype=torch.float32)
-        time_decay = torch.randn(hidden_size, dtype=torch.float32)
-        time_first = torch.randn(hidden_size, dtype=torch.float32)
+        receptance = torch.randn(batch_size, seq_length, hidden_size, dtype=torch.float32).uniform_(-1, 1)
+        key = torch.randn(batch_size, seq_length, hidden_size, dtype=torch.float32).uniform_(-1, 1)
+        value = torch.randn(batch_size, seq_length, hidden_size, dtype=torch.float32).uniform_(-1, 1)
+        time_decay = torch.randn(hidden_size, dtype=torch.float32).uniform_(-1, 1)
+        time_first = torch.randn(hidden_size, dtype=torch.float32).uniform_(-1, 1)
         state = torch.zeros(batch_size, num_heads, head_size, head_size, dtype=torch.float32)
 
         for dtype in [torch.float32, torch.float16, torch.bfloat16]:
@@ -127,7 +127,6 @@ class TestRwkv5LinearAttention(unittest.TestCase):
 
             out_cpu = RUN_FORMULA_2(batch_size, seq_length, hidden_size, num_heads, receptance, key, value, torch.exp(-torch.exp(time_decay)), time_first)
             out_cuda = rwkv5_cuda_linear_attention(receptance.to("cuda"), key.to("cuda"), value.to("cuda"), time_decay.to("cuda"), time_first.to("cuda"), state.to("cuda"))
-
             self.assertTrue(torch.allclose(out_cpu.to(dtype), out_cuda.cpu(), rtol=0.1, atol=0.1))
             print(f'test_rwkv5_linear_attention_prefill_forward passed dtype: {dtype}')
 
@@ -193,7 +192,7 @@ class TestRwkv5LinearAttention(unittest.TestCase):
             time_decay.grad.data.zero_()
             time_first.grad.data.zero_()
 
-            g_receptance_1, g_key_1, g_value_1,g_time_decay_1, g_time_first_1 = RUN_BACKWARD_1(batch_size, seq_length, hidden_size, num_heads, g_out_cpu, receptance, key, value, time_decay, time_first)
+            g_receptance_1, g_key_1, g_value_1,g_time_decay_1, g_time_first_1 = RUN_BACKWARD_1(batch_size, seq_length, hidden_size, num_heads, g_formula1, receptance, key, value, time_decay, time_first)
             self.assertTrue(torch.allclose(g_receptance_0.cpu().to(dtype), g_receptance_1.cpu().to(dtype), rtol=0.1, atol=0.1))
             self.assertTrue(torch.allclose(g_key_0.cpu().to(dtype), g_key_1.cpu().to(dtype), rtol=0.1, atol=0.1))
             self.assertTrue(torch.allclose(g_value_0.cpu().to(dtype), g_value_1.cpu().to(dtype), rtol=0.1, atol=0.1))
