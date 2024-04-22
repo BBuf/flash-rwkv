@@ -33,6 +33,7 @@ The CUDA kernel used here is the optimal version we manually implemented in [RWK
 ### Changelog
 
 - [x] Released `v0.2.0` on 2024.4.6, supporting the RWKV5 model, and providing the `rwkv5_cuda_linear_attention` API.
+- [x] Released `v0.2.1` on 2024.4.22, applied `rwkv5_cuda_linear_attention` to [rwkv-5-world-1b5](https://huggingface.co/RWKV/rwkv-5-world-1b5) and [rwkv-5-world-3b](https://huggingface.co/RWKV/rwkv-5-world-3b)
 
 ### Plan
 
