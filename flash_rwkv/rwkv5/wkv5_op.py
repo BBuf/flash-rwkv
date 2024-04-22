@@ -96,10 +96,10 @@ class Rwkv5LinearAttention(torch.autograd.Function):
                     time_first,
                     out,
                 )
-            return out
+            return out, state
 
     @staticmethod
-    def backward(ctx, gout):
+    def backward(ctx, gout, gstate):
         with torch.no_grad():
             batch = ctx.batch
             seq_length = ctx.seq_length
