@@ -1,4 +1,5 @@
 import torch
+from fla.ops.rwkv6.chunk import chunk_rwkv6
 from fla.ops.rwkv6.recurrent_fuse import fused_recurrent_rwkv6
 
 def naive_recurrent_rwkv6(
@@ -151,3 +152,6 @@ if __name__ == "__main__":
     
     o3, _ = fused_recurrent_rwkv6(q, k, v, w, u, initial_state=state, scale=1.0)
     assert o1.allclose(o3.transpose(1, 2).to(torch.float32), 0, 1e-1), breakpoint()
+
+    o4, _ = chunk_rwkv6(q, k, v, w, u, initial_state=state, scale=1.0)
+    assert o1.allclose(o4.transpose(1, 2).to(torch.float32), 0, 1e-1), breakpoint()
