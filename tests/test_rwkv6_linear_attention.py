@@ -128,7 +128,7 @@ if __name__ == "__main__":
     D = 64
     HIDDEN_SIZE = H * D
     dtype = torch.float32
-    # HF Impl
+    # HF Impl Input
     q = (torch.randn(B, L, HIDDEN_SIZE).cuda().to(torch.float16)).requires_grad_(True)
     k = (torch.randn(B, L, HIDDEN_SIZE).cuda().to(torch.float16)).requires_grad_(True)
     v = torch.randn(B, L, HIDDEN_SIZE).cuda().to(torch.float16).requires_grad_(True)
@@ -136,9 +136,9 @@ if __name__ == "__main__":
     u = (torch.randn(H, D).cuda().to(torch.float16)).requires_grad_(True)
     state = (torch.randn(B, H, D, D).cuda().to(torch.float32)).requires_grad_(True)
     
-    o1, _ = hf_rwkv6_linear_attention_cpu(q, k, v, w, u, state)
+    o1, state1 = hf_rwkv6_linear_attention_cpu(q, k, v, w, u, state)
     
-    # Naive Recurrent RWKV6
+    # FLA Impl Input
     batch, seq_length, _ = q.shape
     num_heads, head_size = u.shape
     k = k.float().view(batch, seq_length, num_heads, head_size).transpose(1, 2) # B, T, H, K -> B, H, T, K
@@ -150,8 +150,10 @@ if __name__ == "__main__":
     o2 = naive_recurrent_rwkv6(q, k, v, w, u, initial_state=state).transpose(1, 2)
     assert o1.allclose(o2.to(torch.float32), 0, 1e-1), breakpoint()
     
-    o3, _ = fused_recurrent_rwkv6(q, k, v, w, u, initial_state=state, scale=1.0)
+    o3, state3 = fused_recurrent_rwkv6(q, k, v, w, u, initial_state=state, scale=1.0, output_final_state=True)
     assert o1.allclose(o3.transpose(1, 2).to(torch.float32), 0, 1e-1), breakpoint()
+    assert state1.allclose(state3.to(torch.float32), 0, 1e-1), breakpoint()
 
-    o4, _ = chunk_rwkv6(q, k, v, w, u, initial_state=state, scale=1.0)
+    o4, state4 = chunk_rwkv6(q, k, v, w, u, initial_state=state, scale=1.0, output_final_state=True)
     assert o1.allclose(o4.transpose(1, 2).to(torch.float32), 0, 1e-1), breakpoint()
+    assert state1.allclose(state4.to(torch.float32), 0, 1e-1), breakpoint()
