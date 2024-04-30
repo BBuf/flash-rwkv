@@ -39,11 +39,11 @@ if __name__ == "__main__":
     dtype = torch.float32
     
     if mode == 'hf':
-        profile_path = '/mnt/data/cangshui/bbuf/rwkv_profile_result/hf/'
+        profile_path = '/bbuf/rwkv_profile_result/hf/'
     elif mode == 'recurrent':
-        profile_path = '/mnt/data/cangshui/bbuf/rwkv_profile_result/recurrent/'
+        profile_path = '/bbuf/rwkv_profile_result/recurrent/'
     elif mode == 'chunk':
-        profile_path = '/mnt/data/cangshui/bbuf/rwkv_profile_result/chunk/'
+        profile_path = '/bbuf/rwkv_profile_result/chunk/'
     else:
         raise NotImplementedError
     with torch.profiler.profile(
