@@ -1,6 +1,7 @@
 import torch
 from fla.ops.rwkv6.chunk import chunk_rwkv6
 from fla.ops.rwkv6.recurrent_fuse import fused_recurrent_rwkv6
+from flash_rwkv import rwkv6_cuda_linear_attention
 
 def naive_recurrent_rwkv6(
     q,
@@ -134,10 +135,15 @@ if __name__ == "__main__":
     v = torch.randn(B, L, HIDDEN_SIZE).cuda().to(torch.float16).requires_grad_(True)
     w = torch.nn.functional.logsigmoid(torch.randn(B, L, HIDDEN_SIZE)).cuda().to(torch.float32).requires_grad_(True)
     u = (torch.randn(H, D).cuda().to(torch.float16)).requires_grad_(True)
-    state = (torch.randn(B, H, D, D).cuda().to(torch.float32)).requires_grad_(True)
+    state = (torch.zeros(B, H, D, D).cuda().to(torch.float32)).requires_grad_(True)
     
     o1, state1 = hf_rwkv6_linear_attention_cpu(q, k, v, w, u, state)
+
+    o2, state2 = rwkv6_cuda_linear_attention(q.to("cuda"), k.to("cuda"), v.to("cuda"), w.to("cuda"), u.flatten().to("cuda"), state.to("cuda"))
     
+    assert o1.allclose(o2.to(torch.float32), 0, 1e-1), breakpoint()
+    assert state1.allclose(state2.to(torch.float32), 0, 1e-1), breakpoint()
+
     # FLA Impl Input
     batch, seq_length, _ = q.shape
     num_heads, head_size = u.shape
@@ -147,13 +153,15 @@ if __name__ == "__main__":
     w = -torch.exp(w.float()).view(batch, seq_length, num_heads, head_size).permute(0, 2, 1, 3) # B, T, H, K -> B, H, T, K
     u = u.float().reshape(num_heads, head_size) # H, K
 
-    o2 = naive_recurrent_rwkv6(q, k, v, w, u, initial_state=state).transpose(1, 2)
-    assert o1.allclose(o2.to(torch.float32), 0, 1e-1), breakpoint()
+    o3 = naive_recurrent_rwkv6(q, k, v, w, u, initial_state=state).transpose(1, 2)
+    assert o1.allclose(o3.to(torch.float32), 0, 1e-1), breakpoint()
     
-    o3, state3 = fused_recurrent_rwkv6(q, k, v, w, u, initial_state=state, scale=1.0, output_final_state=True)
-    assert o1.allclose(o3.transpose(1, 2).to(torch.float32), 0, 1e-1), breakpoint()
-    assert state1.allclose(state3.to(torch.float32), 0, 1e-1), breakpoint()
-
-    o4, state4 = chunk_rwkv6(q, k, v, w, u, initial_state=state, scale=1.0, output_final_state=True)
+    o4, state4 = fused_recurrent_rwkv6(q, k, v, w, u, initial_state=state, scale=1.0, output_final_state=True)
     assert o1.allclose(o4.transpose(1, 2).to(torch.float32), 0, 1e-1), breakpoint()
     assert state1.allclose(state4.to(torch.float32), 0, 1e-1), breakpoint()
+
+    o5, state5 = chunk_rwkv6(q, k, v, w, u, initial_state=state, scale=1.0, output_final_state=True)
+    assert o1.allclose(o5.transpose(1, 2).to(torch.float32), 0, 1e-1), breakpoint()
+    assert state1.allclose(state5.to(torch.float32), 0, 1e-1), breakpoint()
+    print('All tests passed!')
+

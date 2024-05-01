@@ -2,6 +2,7 @@ import sys
 import torch
 from fla.ops.rwkv6.chunk import chunk_rwkv6
 from fla.ops.rwkv6.recurrent_fuse import fused_recurrent_rwkv6
+from flash_rwkv import rwkv6_cuda_linear_attention
 
 def hf_rwkv6_linear_attention_cpu(receptance, key, value, time_decay, time_first, state):
     # For CPU fallback. Will be slower and probably take more memory than the custom CUDA kernel if not executed
@@ -44,6 +45,8 @@ if __name__ == "__main__":
         profile_path = '/bbuf/rwkv_profile_result/recurrent/'
     elif mode == 'chunk':
         profile_path = '/bbuf/rwkv_profile_result/chunk/'
+    elif mode == 'cuda':
+        profile_path = '/bbuf/rwkv_profile_result/cuda'
     else:
         raise NotImplementedError
     with torch.profiler.profile(
@@ -68,6 +71,8 @@ if __name__ == "__main__":
             state = (torch.randn(B, H, D, D).cuda().to(torch.float32)).requires_grad_(True)
             if mode == 'hf':
                 o1, state1 = hf_rwkv6_linear_attention_cpu(q, k, v, w, u, state)
+            elif mode =='cuda':
+                o2, state2 = rwkv6_cuda_linear_attention(q, k, v, w, u.flatten(), state)
             else:
                 batch, seq_length, _ = q.shape
                 num_heads, head_size = u.shape
@@ -78,7 +83,7 @@ if __name__ == "__main__":
                 u = u.float().reshape(num_heads, head_size) # H, K
 
                 if mode == 'recurrent':
-                    o2, state2 = fused_recurrent_rwkv6(q, k, v, w, u, initial_state=state, scale=1.0, output_final_state=True)
+                    o3, state3 = fused_recurrent_rwkv6(q, k, v, w, u, initial_state=state, scale=1.0, output_final_state=True)
                 elif mode == 'chunk':
                     o4, state4 = chunk_rwkv6(q, k, v, w, u, initial_state=state, scale=1.0, output_final_state=True)
             p.step()

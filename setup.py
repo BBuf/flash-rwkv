@@ -9,7 +9,7 @@ setup(
     version="0.2.1",
     packages=find_packages(),
     package_data={
-        'flash_rwkv': ['rwkv5/*.cu', 'rwkv5/*.cpp'],
+        'flash_rwkv': ['rwkv5/*.cu', 'rwkv5/*.cpp', 'rwkv6/*.cu', 'rwkv6/*.cpp'],
     },
     ext_modules=[],
     install_requires=[
