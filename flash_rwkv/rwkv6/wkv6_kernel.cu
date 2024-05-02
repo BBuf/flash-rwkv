@@ -19,17 +19,17 @@ __global__ void kernel_forward(const int B, const int T, const int C, const int 
     __shared__ float r[_N_], k[_N_], u[_N_], w[_N_];
     float state[_N_];
 
-    __syncthreads();
-    u[i] = float(_u[i]);
-    __syncthreads();
     for (int j = 0; j < _N_; j++) {
         state[j] = _s[j];
     }
+    __syncthreads();
+    u[i] = float(_u[i]);
+    __syncthreads();
 
     for (int t = b*T*C + h*_N_ + i; t < (b+1)*T*C + h*_N_ + i; t += C)
     {
         __syncthreads();
-        w[i] = exp(_w[t]);
+        w[i] = __expf(-__expf(float(_w[t])));
         r[i] = float(_r[t]);
         k[i] = float(_k[t]);
         __syncthreads();
