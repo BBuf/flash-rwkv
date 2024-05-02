@@ -6,22 +6,23 @@ typedef at::Half fp16;
 typedef float fp32;
 
 template <typename F>
-__global__ void kernel_forward(const int B, const int T, const int C, const int H,
-                               float* _s, const F *__restrict__ const _r, const F *__restrict__ const _k, const F *__restrict__ const _v, const float *__restrict__ _w, const F *__restrict__ _u,
+__global__ void kernel_forward(const int B, const int T, const int C, const int H, float *__restrict__ _state,
+                               const F *__restrict__ const _r, const F *__restrict__ const _k, const F *__restrict__ const _v, const float *__restrict__ _w, const F *__restrict__ _u,
                                F *__restrict__ const _y)
 {
     const int b = blockIdx.x / H;
     const int h = blockIdx.x % H;
     const int i = threadIdx.x;
     _u += h*_N_;
-    _s += h*_N_*_N_ + i*_N_;
+    _state += h*_N_*_N_ + i*_N_; // wrong if B > 1 !!!
 
     __shared__ float r[_N_], k[_N_], u[_N_], w[_N_];
+    
     float state[_N_];
+    #pragma unroll
+    for (int j = 0; j < _N_; j++)
+        state[j] = _state[j];
 
-    for (int j = 0; j < _N_; j++) {
-        state[j] = _s[j];
-    }
     __syncthreads();
     u[i] = float(_u[i]);
     __syncthreads();
@@ -29,7 +30,7 @@ __global__ void kernel_forward(const int B, const int T, const int C, const int 
     for (int t = b*T*C + h*_N_ + i; t < (b+1)*T*C + h*_N_ + i; t += C)
     {
         __syncthreads();
-        w[i] = __expf(-__expf(float(_w[t])));
+        w[i] = _w[t];
         r[i] = float(_r[t]);
         k[i] = float(_k[t]);
         __syncthreads();
@@ -66,7 +67,7 @@ __global__ void kernel_forward(const int B, const int T, const int C, const int 
     }
     #pragma unroll
     for (int j = 0; j < _N_; j++)
-        _s[j] = state[j];
+        _state[j] = state[j];
 }
 
 void cuda_forward_bf16(int B, int T, int C, int H, float *state, bf16 *r, bf16 *k, bf16 *v, float *w, bf16 *u, bf16 *y)

@@ -38,11 +38,12 @@ class Rwkv6LinearAttention(torch.autograd.Function):
         with torch.no_grad():
             assert state.dtype == torch.float32
             batch, seq_length, hidden_size = key.shape
-            num_heads = time_first.shape[0] // 64
+            num_heads = time_first.shape[0]
             ctx.batch = batch
             ctx.seq_length = seq_length
             ctx.hidden_size = hidden_size
             ctx.num_heads = num_heads
+            ee_time_decay = torch.exp(-torch.exp(time_decay.float())).contiguous()
             out = torch.empty(
                 (batch, seq_length, num_heads, hidden_size // num_heads),
                 device=receptance.device,
@@ -60,7 +61,7 @@ class Rwkv6LinearAttention(torch.autograd.Function):
                     receptance,
                     key,
                     value,
-                    time_decay,
+                    ee_time_decay,
                     time_first,
                     out,
                 )
@@ -74,7 +75,7 @@ class Rwkv6LinearAttention(torch.autograd.Function):
                     receptance,
                     key,
                     value,
-                    time_decay,
+                    ee_time_decay,
                     time_first,
                     out,
                 )
@@ -88,7 +89,7 @@ class Rwkv6LinearAttention(torch.autograd.Function):
                     receptance,
                     key,
                     value,
-                    time_decay,
+                    ee_time_decay,
                     time_first,
                     out,
                 )

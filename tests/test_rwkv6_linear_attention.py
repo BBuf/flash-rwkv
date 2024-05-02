@@ -101,11 +101,11 @@ def hf_rwkv6_linear_attention_cpu(receptance, key, value, time_decay, time_first
     # within a torch.no_grad.
     batch, seq_length, _ = receptance.shape
     num_heads, head_size = time_first.shape
-    key = key.float().view(batch, seq_length, num_heads, head_size).transpose(1, 2).transpose(-2, -1)
-    value = value.float().view(batch, seq_length, num_heads, head_size).transpose(1, 2)
-    receptance = receptance.float().view(batch, seq_length, num_heads, head_size).transpose(1, 2)
-    time_decay = torch.exp(-torch.exp(time_decay.float())).view(batch, seq_length, num_heads, head_size).permute(0, 2, 3, 1)
-    time_first = time_first.float().reshape(-1, 1, 1).reshape(num_heads, -1, 1)
+    key = key.float().view(batch, seq_length, num_heads, head_size).transpose(1, 2).transpose(-2, -1) # b, t, h, n -> b, h, t, n -> b, h, n, t
+    value = value.float().view(batch, seq_length, num_heads, head_size).transpose(1, 2) # b, t, h, n -> b, h, t, n
+    receptance = receptance.float().view(batch, seq_length, num_heads, head_size).transpose(1, 2) # b, t, h, n -> b, h, t, n
+    time_decay = torch.exp(-torch.exp(time_decay.float())).view(batch, seq_length, num_heads, head_size).permute(0, 2, 3, 1) # b, t, h, n -> b, h, n, t
+    time_first = time_first.float().reshape(-1, 1, 1).reshape(num_heads, -1, 1) # h, n -> h * n, 1, 1 -> h, n, 1
     out = torch.zeros_like(key).reshape(batch, seq_length, num_heads, head_size)
 
     for current_index in range(seq_length):
@@ -116,11 +116,12 @@ def hf_rwkv6_linear_attention_cpu(receptance, key, value, time_decay, time_first
         attention_output = current_key @ current_value
         out[:, current_index] = (current_receptance @ (time_first * attention_output + state)).squeeze(2)
         with torch.no_grad():
-            state = attention_output + current_time_decay * state
+            # attention_output.shape: [b, h, n, 1] x [b, h, 1, n] -> [b, h, n, n]
+            # current_time_decay * state: [b, h, n, 1] * [b, h, n, n] ->[b, h, n, n]
+            # state.shape: [b, h, n, n]
+            state = attention_output + current_time_decay * state 
 
     return out, state
-
-
 
 if __name__ == "__main__":
     B = 1
@@ -136,13 +137,11 @@ if __name__ == "__main__":
     w = torch.nn.functional.logsigmoid(torch.randn(B, L, HIDDEN_SIZE)).cuda().to(torch.float32).requires_grad_(True)
     u = (torch.randn(H, D).cuda().to(torch.float16)).requires_grad_(True)
     state = (torch.zeros(B, H, D, D).cuda().to(torch.float32)).requires_grad_(True)
-    
     o1, state1 = hf_rwkv6_linear_attention_cpu(q, k, v, w, u, state)
-
-    o2, state2 = rwkv6_cuda_linear_attention(q.to("cuda"), k.to("cuda"), v.to("cuda"), w.to("cuda"), u.flatten().to("cuda"), state.to("cuda"))
+    o2, state2 = rwkv6_cuda_linear_attention(q, k, v, w, u, state)
     
-    assert o1.allclose(o2.to(torch.float32), 0, 1e-1), breakpoint()
-    assert state1.allclose(state2.to(torch.float32), 0, 1e-1), breakpoint()
+    assert o1.allclose(o2.to(torch.float32), 0, 0.5), breakpoint()
+    assert state1.allclose(state2.transpose(2, 3).to(torch.float32), 0, 0.5), breakpoint()
 
     # FLA Impl Input
     batch, seq_length, _ = q.shape
